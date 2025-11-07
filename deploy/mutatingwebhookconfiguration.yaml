@@ -1,0 +1,24 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: port-injector
+webhooks:
+  - name: "container-mutations.syscallx86.com"
+    failurePolicy: "Fail"
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values: [ "simple-api" ]
+    rules:
+      - operations: [ "CREATE"]
+        apiGroups: [ "" ]
+        apiVersions: [ "v1" ]
+        resources: [ "pods" ]
+        scope: "Namespaced"
+    clientConfig:
+      url: https://build.vxland.syscallx86.com:8443/mutate
+      caBundle: LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tCk1JSURVVENDQWptZ0F3SUJBZ0lVZXEyMEQ0bk9Wam1lMi93aFRiYWtWaUcrbmc4d0RRWUpLb1pJaHZjTkFRRUwKQlFBd0pqRWtNQ0lHQTFVRUF3d2JZblZwYkdRdWRuaHNZVzVrTG5ONWMyTmhiR3g0T0RZdVkyOXRNQjRYRFRJMQpNVEV3TnpFek5EQXhNVm9YRFRNMU1URXdOVEV6TkRBeE1Wb3dKakVrTUNJR0ExVUVBd3diWW5WcGJHUXVkbmhzCllXNWtMbk41YzJOaGJHeDRPRFl1WTI5dE1JSUJJakFOQmdrcWhraUc5dzBCQVFFRkFBT0NBUThBTUlJQkNnS0MKQVFFQTVPdU9LUDIwcmNoMndrWjhZeXNuWGVMM21vbkppWk5mSkNmN2pzU1k5djVpY1FMR3UvQU5ZRmdVR0QycQplLzNzQ2tManh6SjVFaXM4MVhLVTJrQXEwOHJndzdrVmQ5cHM4dmpDNWhHQ2syVnhLeWtyY3VPYU5VUG9XY3pMClYyc0FyV0FLd0hzeU92UzRUMlRwcTQ4cStZSUpoaWVrM0NDZ2NVWUNNSnlQZW5NM2hDb2VpWFZmY2JORnZGWXoKa0NPK2l2MEhpRktzTmNHVXdXWGdwckNpS2dmdlgxdkxRUVdnSnBJR2FEMnF2dDErK2o0RnlhNnlFbHRlanNDUgp0bjhnOVZYQ3BGKy9MSk5QUkZ3dTUwMjdXUnlFTmJTOFhjK08reGZTalVqeGxIa2lndnp1cXNoQmpLMGE1eGZZCkFaYmM1c2JZMWdoVDNMaThtazcrNmxuYzFRSURBUUFCbzNjd2RUQWRCZ05WSFE0RUZnUVVRT3hhREIzd0pTOTcKSnUzN2ZZZUJCaVBlRXQ4d0h3WURWUjBqQkJnd0ZvQVVRT3hhREIzd0pTOTdKdTM3ZlllQkJpUGVFdDh3RHdZRApWUjBUQVFIL0JBVXdBd0VCL3pBaUJnTlZIUkVFR3pBWmdoY3FMblo0YkdGdVpDNXplWE5qWVd4c2VEZzJMbU52CmJUQU5CZ2txaGtpRzl3MEJBUXNGQUFPQ0FRRUFPK2c1V2Z5aElGaUd3YWZ4b1FhNXZqanF2Ym5JOHRJU01vUUEKRVUwckVoYmpFblQ5WndvY0pHWGp4Z1hyU1RyQkxpeThaMlBEdGtNSmF3dlNydE8vc3dLbzU5Uld1MWUyNDc1RwpCM0xwWmRGVEZ1M3FtVG5uWUl6Tjc4cHlnTmdvaUYveGxCWFo3TWVYYU53MVZHenVRM3JhZDRzbGVXOFhmZ1dLCmNXWG5rR1lCcERsMm1xaU1WV010VGVzM2hxUzZjSTRKWVJzU0NJdEk0Q2F6c25TTThxVk5kRkJsQ05uWURHOEwKY05LRHBGYXVOaTVLdWxCZk5UZ204Mkc1d2tNYmx0Rzh4VkFpbjFjYjA2bmF6R0p5SGRHWEo1MlZ2TFZ0ODBRVQozYmdVWWtobEt3b2h0Rlg0aTM1Q1hqTHJYRFJoWGpKeHZ5OEJQSXdlelp3cG9VQ2dZZz09Ci0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0K
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    timeoutSeconds: 5

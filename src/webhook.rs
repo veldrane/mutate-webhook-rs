@@ -61,24 +61,24 @@ pub fn build_envoy_port_patch(pod: &Pod) -> Option<Vec<Value>> {
 
     // heuristika: name nebo image obsahuje envoy / dataplane -> zmenit
     let idx = spec.containers.iter().position(|c| {
-        c.name == "envoy"
-            || c.name == "envoy-sidecar"
+        c.name == "simple-api"
+            || c.name == "simple-api"
             || c
                 .image
                 .as_deref()
                 .unwrap_or("")
-                .contains("envoy")
+                .contains("simple-api")
             || c
                 .image
                 .as_deref()
                 .unwrap_or("")
-                .contains("consul-dataplane")
+                .contains("simple-api")
     })?;
 
     let container = &spec.containers[idx];
 
     let desired_port = 9100;
-    let desired_name = "envoy-metrics";
+    let desired_name = "metrics";
 
     // když už port existuje, nic nepatchujeme
     if let Some(ports) = &container.ports {
