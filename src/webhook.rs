@@ -1,14 +1,10 @@
 use base64::{engine::general_purpose, Engine as _};
-use kube::api::{Api, PatchParams, Patch};
 use k8s_openapi::api::core::v1::Pod;
 //use kube::api::core::v1::Pod;
+use crate::prelude::*;
 
-use poem::{
-    get, handler,
-    listener::TcpListener,
-    post, web::Json,
-    EndpointExt, Route, Server,
-};
+
+use poem::{handler, web::Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
@@ -55,7 +51,7 @@ pub struct AdmissionResponse {
 /// - nebo už ten port existuje
 /// 
 
-pub fn build_envoy_port_patch(pod: &Pod) -> Option<Vec<Value>> {
+pub fn build_patch(pod: &Pod) -> Option<Vec<Value>> {
     
     let spec = pod.spec.as_ref()?;
 
@@ -119,16 +115,50 @@ pub fn build_envoy_port_patch(pod: &Pod) -> Option<Vec<Value>> {
 }
 
 #[handler]
-async fn healthz() -> &'static str {
-    "ok"
-}
+pub async fn mutate(body: Body) -> Json<AdmissionReviewResponse> {
+    let data = match body.into_bytes().await {
+        Ok(data) => data,
+        Err(_) => {
+            return Json(AdmissionReviewResponse {
+                api_version: "admission.k8s.io/v1".to_string(),
+                kind: "AdmissionReview".to_string(),
+                response: AdmissionResponse {
+                    uid: "".to_string(),
+                    allowed: false,
+                    patch: None,
+                    patch_type: None,
+                },
+            });
+        }
+    };
 
-#[handler]
-async fn mutate(Json(review): Json<AdmissionReviewRequest>) -> Json<AdmissionReviewResponse> {
+    let review: AdmissionReviewRequest = match serde_json::from_slice(&data) {
+        Ok(review) => review,
+        Err(_) => {
+            return Json(AdmissionReviewResponse {
+                api_version: "admission.k8s.io/v1".to_string(),
+                kind: "AdmissionReview".to_string(),
+                response: AdmissionResponse {
+                    uid: "".to_string(),
+                    allowed: false,
+                    patch: None,
+                    patch_type: None,
+                },
+            });
+        }
+    };
+
+    //println!("Received AdmissionReview: {:?}", review);
+    //println!("{}", serde_json::to_string(&review.request.object.spec).unwrap_or_else(|_| "Failed to serialize object".to_string()));
+
+
+
     let uid = review.request.uid.clone();
     let pod = review.request.object;
 
-    let patch_ops = build_envoy_port_patch(&pod);
+    let patch_ops = build_patch(&pod);
+
+    println!("{}", serde_json::to_string_pretty(&patch_ops).unwrap_or_else(|_| "Failed to serialize patch ops".to_string()));
 
     let (patch_b64, patch_type) = if let Some(ops) = patch_ops {
         let bytes = serde_json::to_vec(&ops)
@@ -154,4 +184,3 @@ async fn mutate(Json(review): Json<AdmissionReviewRequest>) -> Json<AdmissionRev
 
     Json(review_response)
 }
-

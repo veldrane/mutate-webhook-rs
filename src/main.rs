@@ -1,7 +1,9 @@
-use base64::{engine::general_purpose, Engine as _};
+use mutate_webhook_rs::{config::{ConfigLoader, FileConfigLoader}, prelude::*};
+
 use poem::{
-    EndpointExt, Route, Server, get, handler, listener::{Listener, RustlsCertificate, RustlsConfig, TcpListener}, post, web::Json, Body
-};
+     Route,
+     Server, 
+     listener::{Listener, RustlsCertificate, RustlsConfig, TcpListener}};
 
 
 const CERT: &str = r#"
@@ -58,100 +60,34 @@ o7R7oq6hcPDqe3fd78WSCWw=
 -----END PRIVATE KEY-----
 "#;
 
-use mutate_webhook_rs::webhook::*;
-
-#[handler]
-async fn healthz() -> &'static str {
-    "ok"
-}
-
-#[handler]
-async fn mutate(body: Body) -> Json<AdmissionReviewResponse> {
-
-
-
-    let data = match body.into_bytes().await {
-        Ok(data) => data,
-        Err(_) => {
-            return Json(AdmissionReviewResponse {
-                api_version: "admission.k8s.io/v1".to_string(),
-                kind: "AdmissionReview".to_string(),
-                response: AdmissionResponse {
-                    uid: "".to_string(),
-                    allowed: false,
-                    patch: None,
-                    patch_type: None,
-                },
-            });
-        }
-    };
-
-    let review: AdmissionReviewRequest = match serde_json::from_slice(&data) {
-        Ok(review) => review,
-        Err(_) => {
-            return Json(AdmissionReviewResponse {
-                api_version: "admission.k8s.io/v1".to_string(),
-                kind: "AdmissionReview".to_string(),
-                response: AdmissionResponse {
-                    uid: "".to_string(),
-                    allowed: false,
-                    patch: None,
-                    patch_type: None,
-                },
-            });
-        }
-    };
-
-    //println!("Received AdmissionReview: {:?}", review);
-    //println!("{}", serde_json::to_string(&review.request.object.spec).unwrap_or_else(|_| "Failed to serialize object".to_string()));
-
-
-
-    let uid = review.request.uid.clone();
-    let pod = review.request.object;
-
-    let patch_ops = build_envoy_port_patch(&pod);
-
-    println!("{}", serde_json::to_string_pretty(&patch_ops).unwrap_or_else(|_| "Failed to serialize patch ops".to_string()));
-
-    let (patch_b64, patch_type) = if let Some(ops) = patch_ops {
-        let bytes = serde_json::to_vec(&ops)
-            .expect("failed to serialize JSONPatch ops");
-        let patch_b64 = general_purpose::STANDARD.encode(bytes);
-        (Some(patch_b64), Some("JSONPatch".to_string()))
-    } else {
-        (None, None)
-    };
-
-    let response = AdmissionResponse {
-        uid,
-        allowed: true,
-        patch: patch_b64,
-        patch_type,
-    };
-
-    let review_response = AdmissionReviewResponse {
-        api_version: "admission.k8s.io/v1".to_string(),
-        kind: "AdmissionReview".to_string(),
-        response,
-    };
-
-    Json(review_response)
-}
 
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    // pro začátek klidně HTTP, v K8s budeš potřebovat HTTPS s TLS (viz níž)
-    let app = Route::new()
-        .at("/mutate", post(mutate))
-        .at("/healthz", get(healthz));
-    //    .with(poem::middleware::Tracing); // jednoduchý tracing/logování
 
-    let lsnr= TcpListener::bind("0.0.0.0:8443").rustls(RustlsConfig::new()
+    let config = build_config();
+
+    println!("Config dump: {:?}", config);
+    let app: AddDataEndpoint<Route, AppState> = app::builder(&config).await;
+
+    let lsnr= TcpListener::bind(format!("{}:{}", config.addr, config.port))
+                                                                        .rustls(RustlsConfig::new()
                                                                             .fallback(RustlsCertificate::new()
                                                                                 .key(KEY)
                                                                                 .cert(CERT)
                                                                             ));
-
     Server::new(lsnr).run(app).await
+}
+
+
+pub fn build_config() -> Config {
+
+    let args = Args::new();
+    let config = match args.config {
+        Some(c) => {
+            let loader = FileConfigLoader { path:  c.to_string()};
+            loader.load()
+        },
+        None => Config::default(),
+    };
+    config
 }
