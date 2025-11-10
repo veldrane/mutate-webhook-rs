@@ -1,14 +1,14 @@
 use base64::{engine::general_purpose, Engine as _};
 use k8s_openapi::api::core::v1::Pod;
 //use kube::api::core::v1::Pod;
-use crate::prelude::*;
+use crate::{app::ContainerPorts, prelude::*};
 
 
 use poem::{handler, web::Json};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AdmissionReviewRequest {
     #[serde(rename = "apiVersion")]
     pub api_version: String,
@@ -16,7 +16,7 @@ pub struct AdmissionReviewRequest {
     pub request: AdmissionRequest,
 }
 
-#[derive(Debug,Deserialize)]
+#[derive(Debug,Deserialize, Serialize)]
 pub struct AdmissionRequest {
     pub uid: String,
     #[serde(rename = "object")]
@@ -32,6 +32,21 @@ pub struct AdmissionReviewResponse {
     pub response: AdmissionResponse,
 }
 
+pub trait ToReview {
+    fn to_review(self) -> AdmissionReviewResponse;
+}
+
+
+impl AdmissionReviewResponse {
+    pub fn empty() -> Self {
+        AdmissionReviewResponse {
+            api_version: "admission.k8s.io/v1".to_string(),
+            kind: "AdmissionReview".to_string(),
+            response: AdmissionResponse::empty(),
+        }
+    }
+}
+
 #[derive(Serialize)]
 pub struct AdmissionResponse {
     pub uid: String,
@@ -43,6 +58,43 @@ pub struct AdmissionResponse {
     // volitelné: status, warnings, auditAnnotations...
 }
 
+impl AdmissionResponse {
+    pub fn empty() -> Self {
+        AdmissionResponse {
+            uid: "".to_string(),
+            allowed: false,
+            patch: None,
+            patch_type: None,
+        }
+    }
+
+    pub fn with_allowed(self, uid: String, patch: &Vec<Value>) -> Self {
+
+        let b64 = match serde_json::to_vec(&patch) {
+            Ok(b) => general_purpose::STANDARD.encode(b),
+            Err(_) => return Self::empty()
+        };
+
+        AdmissionResponse {
+            uid,
+            allowed: true,
+            patch: Some(b64),
+            patch_type: Some("JSONPatch".to_string()),
+        }
+    }
+}
+
+impl ToReview for AdmissionResponse {
+    fn to_review(self) -> AdmissionReviewResponse {
+        AdmissionReviewResponse {
+            api_version: "admission.k8s.io/v1".to_string(),
+            kind: "AdmissionReview".to_string(),
+            response: self,
+        }
+    }
+}
+
+
 /// Najde Envoy container v Podu a připraví JSONPatch pro přidání metrics portu.
 ///
 /// Vrací `None`, pokud:
@@ -51,7 +103,7 @@ pub struct AdmissionResponse {
 /// - nebo už ten port existuje
 /// 
 
-pub fn build_patch(pod: &Pod) -> Option<Vec<Value>> {
+pub fn build_patch(container_ports: &ContainerPorts, pod: &Pod) -> Option<Vec<Value>> {
     
     let spec = pod.spec.as_ref()?;
 
@@ -73,12 +125,12 @@ pub fn build_patch(pod: &Pod) -> Option<Vec<Value>> {
 
     let container = &spec.containers[idx];
 
-    let desired_port = 9100;
-    let desired_name = "metrics";
+    //let desired_port = 9100;
+    //let desired_name = "metrics";
 
     // když už port existuje, nic nepatchujeme
     if let Some(ports) = &container.ports {
-        if ports.iter().any(|p| p.container_port == desired_port) {
+        if ports.iter().any(|p| p.container_port == container_ports.port) {
             return None;
         }
 
@@ -88,8 +140,8 @@ pub fn build_patch(pod: &Pod) -> Option<Vec<Value>> {
             "op": "add",
             "path": path,
             "value": {
-                "name": desired_name,
-                "containerPort": desired_port,
+                "name": container_ports.name,
+                "containerPort": container_ports.port,
                 "protocol": "TCP"
             }
         });
@@ -103,8 +155,8 @@ pub fn build_patch(pod: &Pod) -> Option<Vec<Value>> {
             "path": path,
             "value": [
                 {
-                    "name": desired_name,
-                    "containerPort": desired_port,
+                    "name": container_ports.name,
+                    "containerPort": container_ports.port,
                     "protocol": "TCP"
                 }
             ]
@@ -115,72 +167,43 @@ pub fn build_patch(pod: &Pod) -> Option<Vec<Value>> {
 }
 
 #[handler]
-pub async fn mutate(body: Body) -> Json<AdmissionReviewResponse> {
+pub async fn mutate(state: Data<&AppState>, body: Body) -> Json<AdmissionReviewResponse> {
+
+    let AppState { log, container_ports, .. } = *state;
+
+    
     let data = match body.into_bytes().await {
         Ok(data) => data,
         Err(_) => {
-            return Json(AdmissionReviewResponse {
-                api_version: "admission.k8s.io/v1".to_string(),
-                kind: "AdmissionReview".to_string(),
-                response: AdmissionResponse {
-                    uid: "".to_string(),
-                    allowed: false,
-                    patch: None,
-                    patch_type: None,
-                },
-            });
+            log.error("Failed to read request body".to_string()).await;
+            return Json(AdmissionReviewResponse::empty());
         }
     };
 
     let review: AdmissionReviewRequest = match serde_json::from_slice(&data) {
         Ok(review) => review,
         Err(_) => {
-            return Json(AdmissionReviewResponse {
-                api_version: "admission.k8s.io/v1".to_string(),
-                kind: "AdmissionReview".to_string(),
-                response: AdmissionResponse {
-                    uid: "".to_string(),
-                    allowed: false,
-                    patch: None,
-                    patch_type: None,
-                },
-            });
+            log.error("Failed to parse AdmissionReviewRequest".to_string()).await;
+            return Json(AdmissionReviewResponse::empty());
         }
     };
 
-    //println!("Received AdmissionReview: {:?}", review);
-    //println!("{}", serde_json::to_string(&review.request.object.spec).unwrap_or_else(|_| "Failed to serialize object".to_string()));
+    let uid = &review.request.uid;
+    let pod = &review.request.object;
+    let patch_ops = build_patch(container_ports, &pod);
 
+    log.info(format!("Mutate request for pod {}", review.request.object.spec.unwrap_or_default().containers[0].name)).await;
 
-
-    let uid = review.request.uid.clone();
-    let pod = review.request.object;
-
-    let patch_ops = build_patch(&pod);
-
-    println!("{}", serde_json::to_string_pretty(&patch_ops).unwrap_or_else(|_| "Failed to serialize patch ops".to_string()));
-
-    let (patch_b64, patch_type) = if let Some(ops) = patch_ops {
-        let bytes = serde_json::to_vec(&ops)
-            .expect("failed to serialize JSONPatch ops");
-        let patch_b64 = general_purpose::STANDARD.encode(bytes);
-        (Some(patch_b64), Some("JSONPatch".to_string()))
-    } else {
-        (None, None)
+    let patch = match patch_ops {
+        Some(ref ops) => ops,
+        None => {
+            log.info("No patch needed".to_string()).await;
+            return Json(AdmissionReviewResponse::empty());
+        }
     };
 
-    let response = AdmissionResponse {
-        uid,
-        allowed: true,
-        patch: patch_b64,
-        patch_type,
-    };
+    let response = AdmissionResponse::empty()
+        .with_allowed(uid.clone(), patch).to_review();
 
-    let review_response = AdmissionReviewResponse {
-        api_version: "admission.k8s.io/v1".to_string(),
-        kind: "AdmissionReview".to_string(),
-        response,
-    };
-
-    Json(review_response)
+    Json(response)
 }

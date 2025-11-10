@@ -5,6 +5,22 @@ pub struct Config {
     pub port: u16,
     pub addr: String,
     pub log_output: String,
+    pub container_ports: ContainerPorts,
+}
+
+#[derive(Clone, Debug)]
+pub struct ContainerPorts {
+    pub name: String,
+    pub port: i32,
+}
+
+impl Default for ContainerPorts {
+    fn default() -> Self {
+        ContainerPorts {
+            name: "metrics".to_string(),
+            port: 9200,
+        }
+    }
 }
 
 impl Config {
@@ -34,6 +50,7 @@ impl Default for Config {
             port: 8443,
             addr: String::from("0.0.0.0"),
             log_output: String::from("console"),
+            container_ports: ContainerPorts::default(),
         }
     }
 }

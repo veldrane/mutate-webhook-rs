@@ -12,12 +12,30 @@ struct RouteDef {
 #[derive(Clone)]
 pub struct AppState {
     pub log: Arc<Logger>,
+    pub container_ports: ContainerPorts,
+}
+
+#[derive(Clone, Debug)]
+pub struct ContainerPorts {
+    pub name: String,
+    pub port: i32,
+}
+
+impl ContainerPorts {
+    pub fn new(name: &str, port: i32) -> Self {
+        ContainerPorts {
+            name: name.to_string(),
+            port,
+        }
+    }
 }
 
 impl AppState {
     pub fn build(config: &Config) -> Self {
         let log = Arc::new(Logger::build(&config.log_output));
-        AppState { log }
+        let container_ports = ContainerPorts::new(&config.container_ports.name, config.container_ports.port);
+
+        AppState { log, container_ports }
     }
 }
 
