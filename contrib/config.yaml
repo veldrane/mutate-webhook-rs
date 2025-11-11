@@ -1,0 +1,5 @@
+"addr" : "0.0.0.0"
+"port" : 8443
+"log": "console"
+"tls_cert": "/tmp/cert.pem"
+"tls_key": "/tmp/cert.key"
