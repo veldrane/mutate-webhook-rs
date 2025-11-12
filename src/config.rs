@@ -62,6 +62,7 @@ pub struct Config {
     pub addr: String,
     pub log_output: String,
     pub container_ports: ContainerPorts,
+    pub container_name: String,
     pub tls_cert:  String,
     pub tls_key: String,
 }
@@ -127,6 +128,7 @@ impl Default for Config {
             addr: String::from("0.0.0.0"),
             log_output: String::from("console"),
             container_ports: ContainerPorts::default(),
+            container_name: "simple-api".to_string(),
             tls_cert: CERT.to_string(),
             tls_key: KEY.to_string(), 
         }

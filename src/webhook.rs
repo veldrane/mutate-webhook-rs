@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
 use k8s_openapi::api::core::v1::Pod;
 //use kube::api::core::v1::Pod;
-use crate::{app::ContainerPorts, prelude::*};
+use crate::{app::{ContainerPorts, ContainerProperties}, prelude::*};
 
 
 use poem::{handler, web::Json, Result, http::StatusCode};
@@ -114,7 +114,7 @@ pub async fn is_annotated(pod: &Pod, log: Arc<Logger>) -> bool {
     }
 }
 
-pub async fn build_patch(container_ports: &ContainerPorts, pod: &Pod, log: Arc<Logger>) -> Option<Vec<Value>> {
+pub async fn build_patch(container_properties: &ContainerProperties, pod: &Pod, log: Arc<Logger>) -> Option<Vec<Value>> {
     
     log.info("Building patch...".to_string()).await;
 
@@ -132,8 +132,8 @@ pub async fn build_patch(container_ports: &ContainerPorts, pod: &Pod, log: Arc<L
 
     // když už port existuje, nic nepatchujeme
     if let Some(ports) = &container.ports {
-        if ports.iter().any(|p| p.container_port == container_ports.port) {
-            log.info(format!("Port {} already exists in container {}", container_ports.port, container.name)).await;
+        if ports.iter().any(|p| p.container_port == container_properties.container_ports.port) {
+            log.info(format!("Port {} already exists in container {}", container_properties.container_ports.name, container_properties.container_ports.port)).await;
             return None;
         }
 
@@ -143,8 +143,8 @@ pub async fn build_patch(container_ports: &ContainerPorts, pod: &Pod, log: Arc<L
             "op": "add",
             "path": path,
             "value": {
-                "name": container_ports.name,
-                "containerPort": container_ports.port,
+                "name": container_properties.name,
+                "containerPort": container_properties.container_ports.port,
                 "protocol": "TCP"
             }
         });
@@ -158,8 +158,8 @@ pub async fn build_patch(container_ports: &ContainerPorts, pod: &Pod, log: Arc<L
             "path": path,
             "value": [
                 {
-                    "name": container_ports.name,
-                    "containerPort": container_ports.port,
+                    "name": container_properties.name,
+                    "containerPort": container_properties.container_ports.port,
                     "protocol": "TCP"
                 }
             ]
