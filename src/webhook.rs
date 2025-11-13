@@ -1,7 +1,7 @@
 use base64::{engine::general_purpose, Engine as _};
 use k8s_openapi::api::core::v1::Pod;
 //use kube::api::core::v1::Pod;
-use crate::{app::{ContainerPorts, ContainerProperties}, prelude::*};
+use crate::{app::Container, prelude::*};
 
 
 use poem::{handler, web::Json, Result, http::StatusCode};
@@ -114,7 +114,7 @@ pub async fn is_annotated(pod: &Pod, log: Arc<Logger>) -> bool {
     }
 }
 
-pub async fn build_patch(container_properties: &ContainerProperties, pod: &Pod, log: Arc<Logger>) -> Option<Vec<Value>> {
+pub async fn build_patch(c: &Container, pod: &Pod, log: Arc<Logger>) -> Option<Vec<Value>> {
     
     log.info("Building patch...".to_string()).await;
 
@@ -127,13 +127,11 @@ pub async fn build_patch(container_properties: &ContainerProperties, pod: &Pod, 
 
     let container = &spec.containers[idx];
 
-    //let desired_port = 9100;
-    //let desired_name = "metrics";
 
     // když už port existuje, nic nepatchujeme
     if let Some(ports) = &container.ports {
-        if ports.iter().any(|p| p.container_port == container_properties.container_ports.port) {
-            log.info(format!("Port {} already exists in container {}", container_properties.container_ports.name, container_properties.container_ports.port)).await;
+        if ports.iter().any(|p| p.container_port == c.port_number) {
+            log.info(format!("Port {} already exists in container {}", c.port_name, c.port_number)).await;
             return None;
         }
 
@@ -143,8 +141,8 @@ pub async fn build_patch(container_properties: &ContainerProperties, pod: &Pod, 
             "op": "add",
             "path": path,
             "value": {
-                "name": container_properties.name,
-                "containerPort": container_properties.container_ports.port,
+                "name": c.port_name,
+                "containerPort": c.port_number,
                 "protocol": "TCP"
             }
         });
@@ -158,8 +156,8 @@ pub async fn build_patch(container_properties: &ContainerProperties, pod: &Pod, 
             "path": path,
             "value": [
                 {
-                    "name": container_properties.name,
-                    "containerPort": container_properties.container_ports.port,
+                    "name": c.port_name,
+                    "containerPort": c.port_number,
                     "protocol": "TCP"
                 }
             ]
@@ -172,7 +170,7 @@ pub async fn build_patch(container_properties: &ContainerProperties, pod: &Pod, 
 #[handler]
 pub async fn mutate(state: Data<&AppState>, body: Body) -> Result<Json<AdmissionReviewResponse>> {
 
-    let AppState { log, container_ports, .. } = *state;
+    let AppState { log, container_properties, .. } = *state;
 
     
     let data = match body.into_bytes().await {
@@ -198,7 +196,7 @@ pub async fn mutate(state: Data<&AppState>, body: Body) -> Result<Json<Admission
         return Ok(Json(AdmissionResponse::empty(uid).to_review()));
     }
 
-    let patch_ops = build_patch(container_ports, &pod, log.clone()).await;
+    let patch_ops = build_patch(container_properties, &pod, log.clone()).await;
     let patch = match patch_ops {
         Some(ref ops) => ops,
         None => {

@@ -61,23 +61,30 @@ pub struct Config {
     pub port: u16,
     pub addr: String,
     pub log_output: String,
-    pub container_ports: ContainerPorts,
-    pub container_name: String,
+    pub container_properties: ContainerProperties,
     pub tls_cert:  String,
     pub tls_key: String,
 }
 
-#[derive(Clone, Debug)]
-pub struct ContainerPorts {
-    pub name: String,
-    pub port: i32,
+pub trait ToProperties<T> {
+    type Output;
+    
+    fn to_properties(config: &Config) -> Self::Output;
 }
 
-impl Default for ContainerPorts {
+#[derive(Clone, Debug)]
+pub struct ContainerProperties {
+    pub name: String,
+    pub port_name: String,
+    pub port_number: i32,
+}
+
+impl Default for ContainerProperties {
     fn default() -> Self {
-        ContainerPorts {
-            name: "metrics".to_string(),
-            port: 9200,
+        ContainerProperties {
+            name: "simple-api".to_string(),
+            port_name: "metrics".to_string(),
+            port_number: 9200,
         }
     }
 }
@@ -119,6 +126,19 @@ impl Config {
         self
     }
 
+    pub fn with_container_properties(mut self, props: ContainerProperties) -> Self {
+        self.container_properties = props;
+        self
+    }
+
+    pub fn get_container_properties(&self) -> ContainerProperties {
+        ContainerProperties {
+            name: self.container_properties.name.clone(),
+            port_name: self.container_properties.port_name.clone(),
+            port_number: self.container_properties.port_number,
+        }
+    }
+
 }
 
 impl Default for Config {
@@ -127,8 +147,7 @@ impl Default for Config {
             port: 8443,
             addr: String::from("0.0.0.0"),
             log_output: String::from("console"),
-            container_ports: ContainerPorts::default(),
-            container_name: "simple-api".to_string(),
+            container_properties: ContainerProperties::default(),
             tls_cert: CERT.to_string(),
             tls_key: KEY.to_string(), 
         }

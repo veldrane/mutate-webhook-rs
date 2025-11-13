@@ -1,4 +1,4 @@
-use crate::{prelude::*, webhook::mutate};
+use crate::{config::ToProperties, prelude::*, webhook::mutate};
 
 // handy alias
 type DynHandler = BoxEndpoint<'static, Response>;
@@ -12,41 +12,45 @@ struct RouteDef {
 #[derive(Clone)]
 pub struct AppState {
     pub log: Arc<Logger>,
-    pub container_ports: ContainerProperties,
+    pub container_properties: Container,
 }
 
 #[derive(Clone, Debug)]
-pub struct ContainerPorts {
+pub struct Container {
     pub name: String,
-    pub port: i32,
+    pub port_name: String,
+    pub port_number: i32,
 }
 
-#[derive(Clone, Debug)]
-pub struct  ContainerProperties {
-    pub name: String,
-    pub container_ports: ContainerPorts,
-}
-
-impl ContainerProperties {
-    pub fn new(name: &str, container_ports: ContainerPorts) -> Self {
-        ContainerProperties {
+impl Container {
+    pub fn new(name: &str, port_name: &str, port_number: i32) -> Self {
+        Container {
             name: name.to_string(),
-            container_ports,
+            port_name: port_name.to_string(),
+            port_number,
         }
     }
 }
 
 
+impl ToProperties <Container> for Config {
+    type Output = Container;
+
+    fn to_properties(config: &Config) -> Self::Output {
+        Container::new(
+            &config.container_properties.name,
+            &config.container_properties.port_name,
+            config.container_properties.port_number,
+        )
+    }
+}
+
 impl AppState {
     pub fn build(config: &Config) -> Self {
         let log = Arc::new(Logger::build(&config.log_output));
-        let container_properties = ContainerProperties::new(&config.container_name
-            ,ContainerPorts { name: config.container_ports.name.clone(), 
-                              port: config.container_ports.port 
-                            }
-        );
+        let container_properties = Config::to_properties(config);
 
-        AppState { log, container_ports: container_properties }
+        AppState { log, container_properties }
     }
 }
 
