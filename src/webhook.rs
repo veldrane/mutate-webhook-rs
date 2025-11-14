@@ -114,15 +114,15 @@ pub async fn is_annotated(pod: &Pod, log: Arc<Logger>) -> bool {
     }
 }
 
-pub async fn build_patch(c: &Container, pod: &Pod, log: Arc<Logger>) -> Option<Vec<Value>> {
+pub async fn build_patch(cp: &Container, pod: &Pod, log: Arc<Logger>) -> Option<Vec<Value>> {
     
     log.info("Building patch...".to_string()).await;
 
     let spec = pod.spec.as_ref()?;
 
-    // heuristika: name nebo image obsahuje envoy / dataplane -> zmenit
+    // heuristika: name nebo image config.name -> zmenit
     let idx = spec.containers.iter().position(|c| {
-        c.name == "simple-api"
+        c.name == cp.name
     })?;
 
     let container = &spec.containers[idx];
@@ -130,8 +130,8 @@ pub async fn build_patch(c: &Container, pod: &Pod, log: Arc<Logger>) -> Option<V
 
     // když už port existuje, nic nepatchujeme
     if let Some(ports) = &container.ports {
-        if ports.iter().any(|p| p.container_port as u16 == c.port_number) {
-            log.info(format!("Port {} already exists in container {}", c.port_name, c.port_number)).await;
+        if ports.iter().any(|p| p.container_port as u16 == cp.port_number) {
+            log.info(format!("Port {} already exists in container {}", cp.port_name, cp.port_number)).await;
             return None;
         }
 
@@ -141,8 +141,8 @@ pub async fn build_patch(c: &Container, pod: &Pod, log: Arc<Logger>) -> Option<V
             "op": "add",
             "path": path,
             "value": {
-                "name": c.port_name,
-                "containerPort": c.port_number,
+                "name": cp.port_name,
+                "containerPort": cp.port_number,
                 "protocol": "TCP"
             }
         });
@@ -156,8 +156,8 @@ pub async fn build_patch(c: &Container, pod: &Pod, log: Arc<Logger>) -> Option<V
             "path": path,
             "value": [
                 {
-                    "name": c.port_name,
-                    "containerPort": c.port_number,
+                    "name": cp.port_name,
+                    "containerPort": cp.port_number,
                     "protocol": "TCP"
                 }
             ]
