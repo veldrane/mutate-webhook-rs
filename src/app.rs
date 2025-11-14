@@ -38,9 +38,9 @@ impl ToProperties <Container> for Config {
 
     fn to_properties(config: &Config) -> Self::Output {
         Container::new(
-            &config.container_properties.name,
-            &config.container_properties.port_name,
-            config.container_properties.port_number,
+            &config.container_patch.name,
+            &config.container_patch.port_name,
+            config.container_patch.port_number,
         )
     }
 }

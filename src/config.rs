@@ -61,31 +61,46 @@ pub struct Config {
     pub port: u16,
     pub addr: String,
     pub log_output: String,
-    pub container_properties: ContainerProperties,
+    pub container_patch: ContainerPatch,
     pub tls_cert:  String,
     pub tls_key: String,
 }
 
 pub trait ToProperties<T> {
     type Output;
-    
+
     fn to_properties(config: &Config) -> Self::Output;
 }
 
 #[derive(Clone, Debug)]
-pub struct ContainerProperties {
+pub struct ContainerPatch {
     pub name: String,
     pub port_name: String,
     pub port_number: i32,
 }
 
-impl Default for ContainerProperties {
+impl Default for ContainerPatch {
     fn default() -> Self {
-        ContainerProperties {
+        ContainerPatch {
             name: "simple-api".to_string(),
             port_name: "metrics".to_string(),
             port_number: 9200,
         }
+    }
+}
+
+impl ContainerPatch {
+    pub fn with_name(mut self, name: &str) -> Self {
+        self.name = name.to_string();
+        self
+    }
+    pub fn with_port_name(mut self, port_name: &str) -> Self {
+        self.port_name = port_name.to_string();
+        self
+    }
+    pub fn with_port_number(mut self, port_number: i32) -> Self {
+        self.port_number = port_number;
+        self
     }
 }
 
@@ -126,16 +141,16 @@ impl Config {
         self
     }
 
-    pub fn with_container_properties(mut self, props: ContainerProperties) -> Self {
-        self.container_properties = props;
+    pub fn with_container_patch(mut self, props: ContainerPatch) -> Self {
+        self.container_patch = props;
         self
     }
 
-    pub fn get_container_properties(&self) -> ContainerProperties {
-        ContainerProperties {
-            name: self.container_properties.name.clone(),
-            port_name: self.container_properties.port_name.clone(),
-            port_number: self.container_properties.port_number,
+    pub fn get_container_properties(&self) -> ContainerPatch {
+        ContainerPatch {
+            name: self.container_patch.name.clone(),
+            port_name: self.container_patch.port_name.clone(),
+            port_number: self.container_patch.port_number,
         }
     }
 
@@ -147,7 +162,7 @@ impl Default for Config {
             port: 8443,
             addr: String::from("0.0.0.0"),
             log_output: String::from("console"),
-            container_properties: ContainerProperties::default(),
+            container_patch: ContainerPatch::default(),
             tls_cert: CERT.to_string(),
             tls_key: KEY.to_string(), 
         }
@@ -194,6 +209,16 @@ impl ConfigLoader for FileConfigLoader {
                             Value::String(s) if s == "port" => {
                                 config = config.with_port(v.as_u64().unwrap() as u16);
                             },
+                    Value::Mapping(_) => {
+                        match k {
+                            Value::String(s) if s == "container_patch" => {
+                                let cp_config = get_cp_config(v);
+                                    config = config.with_container_patch(cp_config);
+                                },
+                            _ => continue
+                            }
+                        }
+        
                             _ => continue,
                         }
                     }
@@ -206,3 +231,35 @@ impl ConfigLoader for FileConfigLoader {
     }
 }
 
+fn get_cp_config(v: Value) -> ContainerPatch {  
+
+
+    let mut cp_config = ContainerPatch::default();
+
+    match v {
+        Value::Mapping(cp_map) => {
+            for (cp_k, cp_v) in cp_map {
+                match cp_v {
+                    Value::Number(_) => {
+                        match cp_k {
+                            Value::String(s) if s == "name" => {
+                                cp_config = cp_config.with_name(cp_v.as_str().unwrap());
+                            },
+                            Value::String(s) if s == "port_name" => {
+                                cp_config = cp_config.with_port_name(cp_v.as_str().unwrap());
+                            },
+                            Value::String(s) if s == "max_delay" => {
+                                cp_config = cp_config.with_port_number(cp_v.as_i64().unwrap() as i32);
+                            },
+                            _ => continue,
+                        }
+                    },
+                    _ => continue,
+                }
+            }
+        },
+        _ => {}
+    }
+
+    cp_config   
+}
