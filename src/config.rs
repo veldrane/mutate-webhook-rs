@@ -76,7 +76,7 @@ pub trait ToProperties<T> {
 pub struct ContainerPatch {
     pub name: String,
     pub port_name: String,
-    pub port_number: i32,
+    pub port_number: u16,
 }
 
 impl Default for ContainerPatch {
@@ -98,7 +98,7 @@ impl ContainerPatch {
         self.port_name = port_name.to_string();
         self
     }
-    pub fn with_port_number(mut self, port_number: i32) -> Self {
+    pub fn with_port_number(mut self, port_number: u16) -> Self {
         self.port_number = port_number;
         self
     }
@@ -182,6 +182,7 @@ impl ConfigLoader for FileConfigLoader {
 
         let r = std::fs::File::open(&self.path).unwrap();
         let file_value: Value = serde_yaml::from_reader(r).unwrap();
+        println!("Config File Value: {:?}", file_value);
         let mut config = Config::default();
 
         if let Value::Mapping(map) = file_value {
@@ -209,25 +210,24 @@ impl ConfigLoader for FileConfigLoader {
                             Value::String(s) if s == "port" => {
                                 config = config.with_port(v.as_u64().unwrap() as u16);
                             },
+                            _ => continue,
+                        }
+                    },
                     Value::Mapping(_) => {
                         match k {
                             Value::String(s) if s == "container_patch" => {
                                 let cp_config = get_cp_config(v);
                                     config = config.with_container_patch(cp_config);
                                 },
-                            _ => continue
-                            }
-                        }
-        
                             _ => continue,
                         }
-                    }
-
+                    },
                     _ => continue,
-                    }
                 }
-            }
-            config
+             }
+        }
+        
+        config
     }
 }
 
@@ -235,6 +235,9 @@ fn get_cp_config(v: Value) -> ContainerPatch {
 
 
     let mut cp_config = ContainerPatch::default();
+
+    println!("Container Patch Value: {:?}", v);
+
 
     match v {
         Value::Mapping(cp_map) => {
@@ -248,12 +251,20 @@ fn get_cp_config(v: Value) -> ContainerPatch {
                             Value::String(s) if s == "port_name" => {
                                 cp_config = cp_config.with_port_name(cp_v.as_str().unwrap());
                             },
-                            Value::String(s) if s == "max_delay" => {
-                                cp_config = cp_config.with_port_number(cp_v.as_i64().unwrap() as i32);
+                            Value::String(s) if s == "port_number" => {
+                                cp_config = cp_config.with_port_number(cp_v.as_u64().unwrap() as u16);
                             },
                             _ => continue,
                         }
                     },
+                    Value::Number(_) => {
+                        match cp_k {
+                            Value::String(s) if s == "port_number" => {
+                                cp_config = cp_config.with_port_number(cp_v.as_u64().unwrap() as u16);
+                            },
+                            _ => continue,
+                        }
+                    }
                     _ => continue,
                 }
             }

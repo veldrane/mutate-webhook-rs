@@ -130,7 +130,7 @@ pub async fn build_patch(c: &Container, pod: &Pod, log: Arc<Logger>) -> Option<V
 
     // když už port existuje, nic nepatchujeme
     if let Some(ports) = &container.ports {
-        if ports.iter().any(|p| p.container_port == c.port_number) {
+        if ports.iter().any(|p| p.container_port as u16 == c.port_number) {
             log.info(format!("Port {} already exists in container {}", c.port_name, c.port_number)).await;
             return None;
         }

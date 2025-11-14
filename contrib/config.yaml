@@ -5,5 +5,5 @@
 "tls_key": "/tmp/cert.key"
 "container_patch":
   name: "simple-api"
-  port_name: "metrics"
+  port_name: "prometheus"
   port_number: 9100

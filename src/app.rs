@@ -19,11 +19,11 @@ pub struct AppState {
 pub struct Container {
     pub name: String,
     pub port_name: String,
-    pub port_number: i32,
+    pub port_number: u16,
 }
 
 impl Container {
-    pub fn new(name: &str, port_name: &str, port_number: i32) -> Self {
+    pub fn new(name: &str, port_name: &str, port_number: u16) -> Self {
         Container {
             name: name.to_string(),
             port_name: port_name.to_string(),
@@ -81,7 +81,7 @@ pub async fn builder(config: &Config) -> AddDataEndpoint<Route, AppState> {
         .nest("/", api)
         .data(state);
 
-    log.info("Application initialized".into()).await;
+    log.info("Webhook initialized".into()).await;
     log.info(format!("Starting server on {}:{}", config.addr, config.port)).await;
 
     route
