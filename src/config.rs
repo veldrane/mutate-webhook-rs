@@ -182,7 +182,6 @@ impl ConfigLoader for FileConfigLoader {
 
         let r = std::fs::File::open(&self.path).unwrap();
         let file_value: Value = serde_yaml::from_reader(r).unwrap();
-        println!("Config File Value: {:?}", file_value);
         let mut config = Config::default();
 
         if let Value::Mapping(map) = file_value {
@@ -235,10 +234,7 @@ fn get_cp_config(v: Value) -> ContainerPatch {
 
 
     let mut cp_config = ContainerPatch::default();
-
-    println!("Container Patch Value: {:?}", v);
-
-
+    
     match v {
         Value::Mapping(cp_map) => {
             for (cp_k, cp_v) in cp_map {
