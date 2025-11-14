@@ -1,5 +1,9 @@
 # mutate-webhook-rs
 
+<p align="left">
+  <img src="./images/mutatewebhook.png" alt="mutate webhook logo" width="180"/>
+</p>
+
 A simple **Kubernetes Mutating Admission Webhook** written in Rust.
 It automatically injects an additional port definition into container specs based on annotation.
 
