@@ -240,7 +240,7 @@ fn get_cp_config(v: Value) -> ContainerPatch {
         Value::Mapping(cp_map) => {
             for (cp_k, cp_v) in cp_map {
                 match cp_v {
-                    Value::Number(_) => {
+                    Value::String(_) => {
                         match cp_k {
                             Value::String(s) if s == "name" => {
                                 cp_config = cp_config.with_name(cp_v.as_str().unwrap());
