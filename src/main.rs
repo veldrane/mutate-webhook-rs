@@ -1,8 +1,9 @@
 //use std::os::unix::process;
+use std::convert::TryInto;
 use std::process;
 
 use mutate_webhook_rs::{
-    config::{ConfigLoader, FileConfigLoader, load_certificate},
+    config::{ConfigLoader, FileConfigLoader, ServerCertificate},
     prelude::*,
 };
 
@@ -16,7 +17,8 @@ async fn main() -> Result<(), std::io::Error> {
     set_panic_hook();
 
     let config = build_config();
-    let server_cert = load_certificate(&config)?;
+    let server_cert: ServerCertificate = (&config).try_into()?;
+
     let app: AddDataEndpoint<Route, AppState> = app::builder(&config).await;
     let lsnr = TcpListener::bind(format!("{}:{}", config.addr, config.port)).rustls(
         RustlsConfig::new().fallback(

@@ -15,7 +15,7 @@ pub struct AppState {
     pub container_properties: Container,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Container {
     pub name: String,
     pub port_name: String,
