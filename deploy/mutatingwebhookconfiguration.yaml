@@ -4,7 +4,7 @@ metadata:
   name: port-injector
 webhooks:
   - name: "container-mutations.syscallx86.com"
-    failurePolicy: "Fail"
+    failurePolicy: "Ignore"
     namespaceSelector:
       matchExpressions:
         - key: kubernetes.io/metadata.name
