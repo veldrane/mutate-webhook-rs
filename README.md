@@ -97,7 +97,7 @@ make build
 
 ## Version History
 
-* 0.5.4
+* 0.7.0
     * Initial public release
 
 ## License
