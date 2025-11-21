@@ -62,8 +62,33 @@ pub struct Config {
     pub addr: String,
     pub log_output: String,
     pub container_patch: ContainerPatch,
-    pub tls_cert:  String,
-    pub tls_key: String,
+    pub cert_path: String,
+    pub key_path: String,
+}
+
+pub struct ServerCertificate {
+    pub cert: String,
+    pub key: String,
+}
+
+impl TryFrom<&Config> for ServerCertificate {
+    type Error = std::io::Error;
+
+    fn try_from(cfg: &Config) -> std::result::Result<Self, Self::Error> {
+        load_certificate(cfg)
+    }
+}
+
+pub fn load_certificate(config: &Config) -> std::io::Result<ServerCertificate> {
+    let mut cf = File::open(&config.cert_path)?;
+    let mut ck = File::open(&config.key_path)?;
+
+    let mut cert = String::new();
+    cf.read_to_string(&mut cert)?;
+    let mut key = String::new();
+    ck.read_to_string(&mut key)?;
+
+    Ok(ServerCertificate { cert, key })
 }
 
 pub trait ToProperties<T> {
@@ -122,22 +147,13 @@ impl Config {
         self.log_output = output.into();
         self
     }
-    pub fn with_tls_cert(mut self, cert: &str) -> Self {
-
-        let mut f = File::open(cert).expect("Unable to open TLS cert file");
-        let mut buffer = String::new();
-        f.read_to_string(&mut buffer).expect("Unable to read TLS cert file");
-
-        self.tls_cert = buffer;
+    pub fn with_tls_cert(mut self, path: &str) -> Self {
+        self.cert_path = path.to_string();
         self
     }
-    pub fn with_tls_key(mut self, key: &str) -> Self {
 
-        let mut f = File::open(key).expect("Unable to open TLS key file");
-        let mut buffer = String::new();
-        f.read_to_string(&mut buffer).expect("Unable to read TLS key file");
-
-        self.tls_key = buffer;
+    pub fn with_tls_key(mut self, path: &str) -> Self {
+        self.key_path = path.to_string();
         self
     }
 
@@ -153,7 +169,6 @@ impl Config {
             port_number: self.container_patch.port_number,
         }
     }
-
 }
 
 impl Default for Config {
@@ -163,8 +178,8 @@ impl Default for Config {
             addr: String::from("0.0.0.0"),
             log_output: String::from("console"),
             container_patch: ContainerPatch::default(),
-            tls_cert: CERT.to_string(),
-            tls_key: KEY.to_string(), 
+            cert_path: CERT.to_string(),
+            key_path: KEY.to_string(),
         }
     }
 }
@@ -179,7 +194,6 @@ pub struct FileConfigLoader {
 
 impl ConfigLoader for FileConfigLoader {
     fn load(&self) -> Config {
-
         let r = std::fs::File::open(&self.path).unwrap();
         let file_value: Value = serde_yaml::from_reader(r).unwrap();
         let mut config = Config::default();
@@ -187,86 +201,71 @@ impl ConfigLoader for FileConfigLoader {
         if let Value::Mapping(map) = file_value {
             for (k, v) in map {
                 match v {
-                    Value::String(_) => {
-                        match k {
-                            Value::String(s) if s == "addr" => {
-                                config = config.with_addr(v.as_str().unwrap());
-                            },
-                            Value::String(s) if s == "log" => {
-                                config = config.with_log_output(v.as_str().unwrap());
-                            },
-                            Value::String(s) if s == "tls_cert" => {
-                                config = config.with_tls_cert(v.as_str().unwrap());
-                            },
-                            Value::String(s) if s == "tls_key" => {
-                                config = config.with_tls_key(v.as_str().unwrap());
-                            },
-                            _ => continue,
+                    Value::String(_) => match k {
+                        Value::String(s) if s == "addr" => {
+                            config = config.with_addr(v.as_str().unwrap());
                         }
+                        Value::String(s) if s == "log" => {
+                            config = config.with_log_output(v.as_str().unwrap());
+                        }
+                        Value::String(s) if s == "tls_cert" => {
+                            config = config.with_tls_cert(v.as_str().unwrap());
+                        }
+                        Value::String(s) if s == "tls_key" => {
+                            config = config.with_tls_key(v.as_str().unwrap());
+                        }
+                        _ => continue,
                     },
-                    Value::Number(_) => {
-                        match k {
-                            Value::String(s) if s == "port" => {
-                                config = config.with_port(v.as_u64().unwrap() as u16);
-                            },
-                            _ => continue,
+                    Value::Number(_) => match k {
+                        Value::String(s) if s == "port" => {
+                            config = config.with_port(v.as_u64().unwrap() as u16);
                         }
+                        _ => continue,
                     },
-                    Value::Mapping(_) => {
-                        match k {
-                            Value::String(s) if s == "container_patch" => {
-                                let cp_config = get_cp_config(v);
-                                    config = config.with_container_patch(cp_config);
-                                },
-                            _ => continue,
+                    Value::Mapping(_) => match k {
+                        Value::String(s) if s == "container_patch" => {
+                            let cp_config = get_cp_config(v);
+                            config = config.with_container_patch(cp_config);
                         }
+                        _ => continue,
                     },
                     _ => continue,
                 }
-             }
+            }
         }
-        
+
         config
     }
 }
 
-fn get_cp_config(v: Value) -> ContainerPatch {  
-
-
+fn get_cp_config(v: Value) -> ContainerPatch {
     let mut cp_config = ContainerPatch::default();
-    
-    match v {
-        Value::Mapping(cp_map) => {
-            for (cp_k, cp_v) in cp_map {
-                match cp_v {
-                    Value::String(_) => {
-                        match cp_k {
-                            Value::String(s) if s == "name" => {
-                                cp_config = cp_config.with_name(cp_v.as_str().unwrap());
-                            },
-                            Value::String(s) if s == "port_name" => {
-                                cp_config = cp_config.with_port_name(cp_v.as_str().unwrap());
-                            },
-                            Value::String(s) if s == "port_number" => {
-                                cp_config = cp_config.with_port_number(cp_v.as_u64().unwrap() as u16);
-                            },
-                            _ => continue,
-                        }
-                    },
-                    Value::Number(_) => {
-                        match cp_k {
-                            Value::String(s) if s == "port_number" => {
-                                cp_config = cp_config.with_port_number(cp_v.as_u64().unwrap() as u16);
-                            },
-                            _ => continue,
-                        }
+
+    if let Value::Mapping(cp_map) = v {
+        for (cp_k, cp_v) in cp_map {
+            match cp_v {
+                Value::String(_) => match cp_k {
+                    Value::String(s) if s == "name" => {
+                        cp_config = cp_config.with_name(cp_v.as_str().unwrap());
+                    }
+                    Value::String(s) if s == "port_name" => {
+                        cp_config = cp_config.with_port_name(cp_v.as_str().unwrap());
+                    }
+                    Value::String(s) if s == "port_number" => {
+                        cp_config = cp_config.with_port_number(cp_v.as_u64().unwrap() as u16);
                     }
                     _ => continue,
-                }
+                },
+                Value::Number(_) => match cp_k {
+                    Value::String(s) if s == "port_number" => {
+                        cp_config = cp_config.with_port_number(cp_v.as_u64().unwrap() as u16);
+                    }
+                    _ => continue,
+                },
+                _ => continue,
             }
-        },
-        _ => {}
+        }
     }
 
-    cp_config   
+    cp_config
 }

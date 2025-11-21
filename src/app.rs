@@ -15,7 +15,7 @@ pub struct AppState {
     pub container_properties: Container,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Container {
     pub name: String,
     pub port_name: String,
@@ -32,8 +32,7 @@ impl Container {
     }
 }
 
-
-impl ToProperties <Container> for Config {
+impl ToProperties<Container> for Config {
     type Output = Container;
 
     fn to_properties(config: &Config) -> Self::Output {
@@ -50,16 +49,16 @@ impl AppState {
         let log = Arc::new(Logger::build(&config.log_output));
         let container_properties = Config::to_properties(config);
 
-        AppState { log, container_properties }
+        AppState {
+            log,
+            container_properties,
+        }
     }
 }
 
 pub async fn builder(config: &Config) -> AddDataEndpoint<Route, AppState> {
-    
-    let state = AppState::build(&config);
+    let state = AppState::build(config);
     let log = state.log.clone();
-
-
 
     let routes: Vec<RouteDef> = vec![
         RouteDef {
@@ -72,17 +71,18 @@ pub async fn builder(config: &Config) -> AddDataEndpoint<Route, AppState> {
         },
     ];
 
-    let api =  routes
-    .into_iter()
-    .fold(Route::new(), |app, def| app.at(def.path, def.handler));
+    let api = routes
+        .into_iter()
+        .fold(Route::new(), |app, def| app.at(def.path, def.handler));
 
-
-    let route=  Route::new()
-        .nest("/", api)
-        .data(state);
+    let route = Route::new().nest("/", api).data(state);
 
     log.info("Webhook initialized".into()).await;
-    log.info(format!("Starting server on {}:{}", config.addr, config.port)).await;
+    log.info(format!(
+        "Starting server on {}:{}",
+        config.addr, config.port
+    ))
+    .await;
 
     route
 }

@@ -1,6 +1,6 @@
 // Removed conflicting import: use tokio::net::unix::pipe::Sender;
-use tokio::sync::mpsc;
 use chrono::prelude::*;
+use tokio::sync::mpsc;
 
 pub struct Logger {
     tx: mpsc::Sender<LogMessage>,
@@ -13,21 +13,21 @@ enum LogType {
     Error,
 }
 
-struct LogMessage(LogType,String);
+struct LogMessage(LogType, String);
 
 impl Logger {
-
     pub fn build(output: &str) -> Self {
-        
         let log_output = get_output(output);
         let (tx, rx): (mpsc::Sender<LogMessage>, mpsc::Receiver<LogMessage>) = mpsc::channel(100);
-        let logger_task =   tokio::spawn(log_receiver(rx, log_output));
+        let logger_task = tokio::spawn(log_receiver(rx, log_output));
         let logger = Logger {
             tx,
             _logger: logger_task,
         };
 
-        let _ = logger.tx.try_send(LogMessage(LogType::Info, "Starting logger".into()));
+        let _ = logger
+            .tx
+            .try_send(LogMessage(LogType::Info, "Starting logger".into()));
         logger
     }
 
@@ -44,15 +44,14 @@ impl Logger {
     }
 }
 
-
-
-
-async fn log_receiver<T: LogOutput + Send + 'static>(mut rx: mpsc::Receiver<LogMessage>, logger: T) {
+async fn log_receiver<T: LogOutput + Send + 'static>(
+    mut rx: mpsc::Receiver<LogMessage>,
+    logger: T,
+) {
     while let Some(log_message) = rx.recv().await {
         logger.log(log_message);
     }
 }
-
 
 fn get_output(output: &str) -> impl LogOutput + Send + 'static {
     match output {
@@ -69,11 +68,11 @@ struct ConsoleLogger;
 
 impl LogOutput for ConsoleLogger {
     fn log(&self, log_message: LogMessage) {
-        let timestamp =  Utc::now().to_string();
+        let timestamp = Utc::now().to_string();
         match log_message.0 {
-            LogType::Info => println!("{} {} {}",timestamp,"---| Info:", log_message.1),
-            LogType::Warning => println!("{}  ---| Warning: {}",timestamp, log_message.1),
-            LogType::Error => println!("{} {} {}",timestamp,"---| Error:", log_message.1),
+            LogType::Info => println!("{} ---| Info: {}", timestamp, log_message.1),
+            LogType::Warning => println!("{}  ---| Warning: {}", timestamp, log_message.1),
+            LogType::Error => println!("{} ---| Error: {}", timestamp, log_message.1),
         }
     }
 }
